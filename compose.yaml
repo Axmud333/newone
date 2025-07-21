@@ -1,0 +1,73 @@
+services:
+  frontend:
+    depends_on:
+      - backend
+    build: 
+      context: frontend/
+      dockerfile: Dockerfile 
+    image: aramk0/front_end
+    container_name: front_end
+    pull_policy: never
+    ports:
+      - 5000:5000
+  backend:
+    build: 
+      # have the build context here so it can see frontend dir
+      context: .
+      dockerfile: backend/Dockerfile
+    image: aramk0/back_end
+    container_name: back_end
+    pull_policy: never
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    depends_on:
+      - postgres
+      - qdrant
+    
+   #at 127.0.0.1:8000 instead of localhost:8000 due to wsl2
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://127.0.0.1:8000/health"]
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 30s
+      
+    #watches for realtime changes in these frontend files
+    develop:
+      watch:
+        - path: app/frontend/templates
+          target: app/frontend/templates
+          action: sync
+    ports:
+      - 8000:8000
+    volumes:
+    # these are bind mounts
+     - ./logs:/app/logs
+     - ./frontend:/app/frontend
+     - ./backend:/app/backend
+     - ./tests:/app/tests
+  postgres:       #  for the uos database
+    image: postgres:15
+    restart: always
+    container_name: postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_HOST}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/uos_database.sql:/docker-entrypoint-initdb.d/uos_database.sql
+    ports:
+      - 5432:5432
+  qdrant:   # just a port for the vector database
+    image: qdrant/qdrant
+    container_name: qdrant
+    ports:
+      - 6333:6333
+volumes:
+  postgres_data:
